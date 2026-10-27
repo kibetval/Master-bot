@@ -201,7 +201,7 @@
     <div class="status-header">
         <div>
             <div style="font-size: 14px; font-weight: bold; color: var(--accent-green);">ROT INTELLIGENT BOT</div>
-            <div id="accountBalance" style="font-size: 11px; color: var(--text-muted);">Initializing...</div>
+            <div id="accountBalance" style="font-size: 11px; color: var(--text-muted);">Connecting secure socket...</div>
         </div>
         <div class="status-indicator">
             <span id="dot" class="dot"></span>
@@ -267,7 +267,7 @@
         <div style="font-weight: bold; margin-bottom: 8px; color: var(--accent-cyan);">WEBSOCKET STREAM LOG</div>
         <div class="tx-row">
             <span>Status:</span>
-            <span id="wsStateLog" style="color: var(--text-muted);">Connecting...</span>
+            <span id="wsStateLog" style="color: var(--text-muted);">Initializing...</span>
         </div>
         <div class="tx-row">
             <span>Active Market:</span>
@@ -306,17 +306,21 @@
     }
 
     window.onload = function() {
-        connectDerivWebSocket(API_TOKEN);
+        connectDerivWebSocket();
     };
 
-    function connectDerivWebSocket(token) {
+    function connectDerivWebSocket() {
         if (ws) ws.close();
 
-        ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+        // Using Deriv's primary secure websocket endpoint with explicit language and app parameters
+        const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}&l=EN&brand=deriv`;
+        document.getElementById('wsStateLog').innerText = 'Connecting to WS...';
+        
+        ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
             document.getElementById('wsStateLog').innerText = 'Socket Open. Authorizing...';
-            ws.send(JSON.stringify({ authorize: token }));
+            ws.send(JSON.stringify({ authorize: API_TOKEN }));
         };
 
         ws.onmessage = (event) => {
@@ -326,7 +330,6 @@
                 if (data.error) {
                     document.getElementById('wsStateLog').innerText = 'Auth Error: ' + data.error.message;
                     document.getElementById('statusText').innerText = 'AUTH FAILED';
-                    console.error("Auth error details:", data.error);
                     return;
                 }
                 document.getElementById('dot').classList.add('active');
@@ -357,15 +360,14 @@
         };
 
         ws.onerror = (err) => {
-            document.getElementById('wsStateLog').innerText = 'Socket Error encountered';
+            document.getElementById('wsStateLog').innerText = 'Network/CORS Block';
             console.error("WS Error:", err);
         };
 
         ws.onclose = (e) => {
             document.getElementById('dot').classList.remove('active');
             document.getElementById('statusText').innerText = 'DISCONNECTED';
-            // If it drops instantly, this will record the exact close code
-            document.getElementById('wsStateLog').innerText = `Closed (Code: ${e.code}, Reason: ${e.reason || 'None'})`;
+            document.getElementById('wsStateLog').innerText = `Closed (Code: ${e.code})`;
         };
     }
 
@@ -411,7 +413,7 @@
         if (tickHistory.length === 0) return;
         
         const counts = Array(10).fill(0);
-        tickHistory.forEach(d => counts[d]++);
+        tickHistory.forEach(d => counts[d]++ );
 
         let maxCount = -1;
         let bestDigit = 0;
