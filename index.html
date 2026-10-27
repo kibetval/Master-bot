@@ -64,37 +64,6 @@
         }
         .dot.active { background-color: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
 
-        .token-card {
-            background: #152230;
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 12px;
-        }
-
-        input, select, button {
-            width: 100%;
-            padding: 10px 12px;
-            margin-top: 6px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background: #0b131c;
-            color: #fff;
-            font-size: 13px;
-        }
-
-        button {
-            background: linear-gradient(135deg, #ffd600, #ffab00);
-            color: #000;
-            font-weight: bold;
-            border: none;
-            cursor: pointer;
-            margin-top: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        button:hover { opacity: 0.9; }
-
         .cycle-box {
             background: #09121a;
             border: 1px solid var(--border-color);
@@ -232,19 +201,12 @@
     <div class="status-header">
         <div>
             <div style="font-size: 14px; font-weight: bold; color: var(--accent-green);">ROT INTELLIGENT BOT</div>
-            <div id="accountBalance" style="font-size: 11px; color: var(--text-muted);">Balance: Live Mode Active</div>
+            <div id="accountBalance" style="font-size: 11px; color: var(--text-muted);">Connecting live account...</div>
         </div>
         <div class="status-indicator">
             <span id="dot" class="dot"></span>
-            <span id="statusText">DISCONNECTED</span>
+            <span id="statusText">CONNECTING</span>
         </div>
-    </div>
-
-    <!-- API Setup Panel -->
-    <div class="token-card" id="setupPanel">
-        <label style="font-size: 11px; color: var(--text-muted);">ENTER DERIV API TOKEN</label>
-        <input type="password" id="apiToken" placeholder="Paste your token here...">
-        <button onclick="startIntelligentBot()">CONNECT & ACTIVATE BOT</button>
     </div>
 
     <!-- Canonical Cycle -->
@@ -305,7 +267,7 @@
         <div style="font-weight: bold; margin-bottom: 8px; color: var(--accent-cyan);">WEBSOCKET STREAM LOG</div>
         <div class="tx-row">
             <span>Status:</span>
-            <span id="wsStateLog" style="color: var(--text-muted);">Idle</span>
+            <span id="wsStateLog" style="color: var(--text-muted);">Connecting...</span>
         </div>
         <div class="tx-row">
             <span>Active Market:</span>
@@ -320,6 +282,7 @@
 
 <script>
     const APP_ID = 1089;
+    const API_TOKEN = "Pat_50bb779b73d21411f6f86962039c9eeef20c92fbe22aa230ebf1fd1812d9d422";
     let ws = null;
     let tickHistory = [];
     let currentSymbolIndex = 0;
@@ -342,21 +305,14 @@
         barContainer.appendChild(col);
     }
 
-    function startIntelligentBot() {
-        const token = document.getElementById('apiToken').value.trim();
-        if (!token) {
-            alert("Please provide your Deriv API token.");
-            return;
-        }
-
-        document.getElementById('wsStateLog').innerText = 'Connecting...';
-        connectDerivWebSocket(token);
-    }
+    // Auto-connect immediately on page load
+    window.onload = function() {
+        connectDerivWebSocket(API_TOKEN);
+    };
 
     function connectDerivWebSocket(token) {
         if (ws) ws.close();
 
-        // Connect directly to Deriv's primary WebSocket endpoint
         ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
         ws.onopen = () => {
@@ -370,17 +326,14 @@
             if (data.msg_type === 'authorize') {
                 if (data.error) {
                     alert('Authorization Failed: ' + data.error.message);
-                    document.getElementById('wsStateLog').innerText = 'Auth Error';
+                    document.getElementById('wsStateLog').innerText = 'Auth Error: ' + data.error.message;
                     return;
                 }
                 document.getElementById('dot').classList.add('active');
                 document.getElementById('statusText').innerText = 'CONNECTED';
                 document.getElementById('wsStateLog').innerText = 'Live Feed Active';
                 
-                // Fetch balance profile
                 ws.send(JSON.stringify({ balance: 1, subscribe: 1 }));
-                
-                // Start initial market subscription & historical pull
                 loadMarketData(symbols[currentSymbolIndex].id, currentSymbolIndex);
                 startCycleTimer();
             }
@@ -389,7 +342,6 @@
                 document.getElementById('accountBalance').innerText = `Balance: ${data.balance.balance} ${data.balance.currency}`;
             }
 
-            // Handles historical back-data packet injection
             if (data.msg_type === 'history' && data.history && data.history.prices) {
                 tickHistory = [];
                 data.history.prices.forEach(price => {
@@ -399,7 +351,6 @@
                 analyzeAndPredictDigit();
             }
 
-            // Handles continuous real-time tick streaming packets
             if (data.msg_type === 'tick' && data.tick) {
                 processLiveTick(data.tick);
             }
@@ -410,20 +361,18 @@
             console.error("WS Error:", err);
         };
 
-        ws.onclose = () => {
+        ws.onclose = (e) => {
             document.getElementById('dot').classList.remove('active');
             document.getElementById('statusText').innerText = 'DISCONNECTED';
-            document.getElementById('wsStateLog').innerText = 'Connection Closed';
+            document.getElementById('wsStateLog').innerText = `Closed (Code: ${e.code})`;
         };
     }
 
     function loadMarketData(symbolId, index) {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         
-        // Clean up previous subscriptions
         ws.send(JSON.stringify({ forget_all: "ticks" }));
 
-        // 1. Request Ticks History to instantly load past data spectrum
         ws.send(JSON.stringify({
             ticks_history: symbolId,
             count: 50,
@@ -431,7 +380,6 @@
             style: "ticks"
         }));
 
-        // 2. Subscribe to live tick stream
         ws.send(JSON.stringify({ ticks: symbolId, subscribe: 1 }));
 
         const activeMarket = symbols[index];
@@ -488,7 +436,7 @@
         }
 
         const confidence = Math.min(84 + (maxCount * 2.5), 98.2).toFixed(1);
-        document.getElementById('confidenceVal').innerText =`${confidence}%`;
+        document.getElementById('confidenceVal').innerText = `${confidence}%`;
 
         if (confidence > 90) {
             document.getElementById('signalAction').innerText = "HIGH PROBABILITY";
@@ -505,7 +453,6 @@
             countdown--;
             if (countdown <= 0) {
                 countdown = 18;
-                // Automatically shift to the next volatility index market scan cycle
                 currentSymbolIndex = (currentSymbolIndex + 1) % symbols.length;
                 loadMarketData(symbols[currentSymbolIndex].id, currentSymbolIndex);
             }
