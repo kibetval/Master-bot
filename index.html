@@ -201,7 +201,7 @@
     <div class="status-header">
         <div>
             <div style="font-size: 14px; font-weight: bold; color: var(--accent-green);">ROT INTELLIGENT BOT</div>
-            <div id="accountBalance" style="font-size: 11px; color: var(--text-muted);">Connecting live account...</div>
+            <div id="accountBalance" style="font-size: 11px; color: var(--text-muted);">Initializing...</div>
         </div>
         <div class="status-indicator">
             <span id="dot" class="dot"></span>
@@ -282,7 +282,7 @@
 
 <script>
     const APP_ID = 1089;
-    const API_TOKEN = "Pat_50bb779b73d21411f6f86962039c9eeef20c92fbe22aa230ebf1fd1812d9d422";
+    const API_TOKEN = "pat_50bb779b73d21411f6f86962039c9eeef20c92fbe22aa230ebf1fd1812d9d422";
     let ws = null;
     let tickHistory = [];
     let currentSymbolIndex = 0;
@@ -305,7 +305,6 @@
         barContainer.appendChild(col);
     }
 
-    // Auto-connect immediately on page load
     window.onload = function() {
         connectDerivWebSocket(API_TOKEN);
     };
@@ -316,7 +315,7 @@
         ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
 
         ws.onopen = () => {
-            document.getElementById('wsStateLog').innerText = 'Authenticating token...';
+            document.getElementById('wsStateLog').innerText = 'Socket Open. Authorizing...';
             ws.send(JSON.stringify({ authorize: token }));
         };
 
@@ -325,8 +324,9 @@
 
             if (data.msg_type === 'authorize') {
                 if (data.error) {
-                    alert('Authorization Failed: ' + data.error.message);
                     document.getElementById('wsStateLog').innerText = 'Auth Error: ' + data.error.message;
+                    document.getElementById('statusText').innerText = 'AUTH FAILED';
+                    console.error("Auth error details:", data.error);
                     return;
                 }
                 document.getElementById('dot').classList.add('active');
@@ -357,14 +357,15 @@
         };
 
         ws.onerror = (err) => {
-            document.getElementById('wsStateLog').innerText = 'Connection Error';
+            document.getElementById('wsStateLog').innerText = 'Socket Error encountered';
             console.error("WS Error:", err);
         };
 
         ws.onclose = (e) => {
             document.getElementById('dot').classList.remove('active');
             document.getElementById('statusText').innerText = 'DISCONNECTED';
-            document.getElementById('wsStateLog').innerText = `Closed (Code: ${e.code})`;
+            // If it drops instantly, this will record the exact close code
+            document.getElementById('wsStateLog').innerText = `Closed (Code: ${e.code}, Reason: ${e.reason || 'None'})`;
         };
     }
 
